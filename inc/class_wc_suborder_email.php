@@ -1,10 +1,8 @@
 <?php
 
-if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly.
-}
+if ( ! defined( 'ABSPATH' ) ) exit;
 
-if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
+if ( class_exists('WC_Email') ) :
 
 	class WC_Suborder_Email extends WC_Email {
 
@@ -19,6 +17,8 @@ if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
 
 		    $this->title          = __( 'Processing order', 'woocommerce' );
 		    $this->description    = __( 'This is an order notification sent to customers containing order details after payment.', 'woocommerce' );
+
+		    $this->template_base  = WPD_BASE_DIR . '/wc-emails/';
 		    $this->template_html  = 'emails/customer-processing-order.php';
 		    $this->template_plain = 'emails/plain/customer-processing-order.php';
 		    $this->placeholders   = array(
@@ -29,7 +29,14 @@ if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
 
 		    // Triggers for this email.
 		   // add_action( 'woocommerce_order_status_pending_to_processing_notification', array( $this, 'trigger' ) );
-		    add_action( 'woocommerce_sub_order_created_email',  array( $this, 'trigger' ) );
+		    //add_action('woocommerce_sub_order_created_email',  array($this,'trigger'));
+
+		add_action( 'woocommerce_payment_complete', array( $this, 'trigger' ) );
+		add_action( 'woocommerce_order_status_on-hold_to_processing_notification', array( $this, 'trigger' ) );
+		add_action( 'woocommerce_order_status_on-hold_to_completed_notification', array( $this, 'trigger' ) );
+		add_action( 'woocommerce_order_status_failed_to_processing_notification', array( $this, 'trigger' ) );
+		add_action( 'woocommerce_order_status_failed_to_completed_notification', array( $this, 'trigger' ) );
+		add_action( 'woocommerce_order_status_pending_to_processing_notification', array( $this, 'trigger' ) );		    
 
 		    // Call parent constructor to load any other defaults not explicity defined here
 		    parent::__construct();
@@ -42,7 +49,7 @@ if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
 		 * @return string
 		 */
 		public function get_default_subject() {
-			return __( 'Your {site_title} order has been received!', 'woocommerce' );
+			return __( 'Your TEST order has been received!', 'woocommerce' );
 		}
 
 		/**
@@ -52,7 +59,7 @@ if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
 		 * @return string
 		 */
 		public function get_default_heading() {
-			return __( 'Thank you for your order', 'woocommerce' );
+			return __( 'Thank you for your order test', 'woocommerce' );
 		}
 
 		/**
@@ -62,24 +69,33 @@ if ( ! class_exists( 'WC_Suborder_Email', false ) ) :
 		 * @param WC_Order|false $order Order object.
 		 */
 		public function trigger( $order_id, $order = false ) {
-			$this->setup_locale();
+			//$this->setup_locale();
 
 			if ( $order_id && ! is_a( $order, 'WC_Order' ) ) {
 				$order = wc_get_order( $order_id );
 			}
 
-			if ( is_a( $order, 'WC_Order' ) ) {
-				$this->object                         = $order;
-				$this->recipient                      = $this->object->billing_email;
+			if(is_a($order, 'WC_Order')) {
+				$this->object = $order;
 				$this->placeholders['{order_date}']   = wc_format_datetime( $this->object->get_date_created() );
 				$this->placeholders['{order_number}'] = $this->object->get_order_number();
+				$this->recipient = $this->object->get_billing_email();
 			}
 
-			if ( $this->is_enabled() && $this->get_recipient() ) {
-				$this->send( $this->get_recipient(), $this->get_subject(), $this->get_content(), $this->get_headers(), $this->get_attachments() );
+			if(!$this->is_enabled() || !$this->get_recipient()) {
+				return;
 			}
+			$this->send(
+				$this->get_recipient(), 
+				$this->get_subject(), 
+				$this->get_content(), 
+				$this->get_headers(), 
+				$this->get_attachments()
+			);
+			
+			$this->object->add_order_note( sprintf( __( '%s email sent to the customer.', 'woocommerce' ), $this->title ));
 
-			$this->restore_locale();
+			//$this->restore_locale();
 		}
 
 		/**
